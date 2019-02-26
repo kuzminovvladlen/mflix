@@ -4,6 +4,9 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
+ipdb = "*"
+flake8 = "*"
+yapf = "*"
 
 [packages]
 pymongo = "==3.7.0"
@@ -20,7 +23,6 @@ Faker = "==0.8.13"
 jupyter_client = "==5.2.3"
 jupyter_console = "==5.2.0"
 jupyter_core = "==4.4.0"
-flake8 = "*"
 
 [requires]
 python_version = "3.7"
