@@ -43,11 +43,9 @@ def get_db():
         """
 
         db = g._database = MongoClient(
-        MFLIX_DB_URI,
-        # TODO: Connection Pooling
-        # Set the maximum connection pool size to 50 active connections.
-        # TODO: Timeouts
-        # Set the write timeout limit to 2500 milliseconds.
+            MFLIX_DB_URI,
+            maxPoolSize=50,
+            wtimeout=2500,
         )["mflix"]
     return db
 
@@ -73,10 +71,6 @@ def get_movies_by_country(countries):
         match one or more values of a specific field.
         """
 
-        # TODO: Projection
-        # Find movies matching the "countries" list, but only return the title
-        # and _id. Do not include a limit in your own implementation, it is
-        # included here to avoid sending 46000 documents down the wire.
         return list(db.movies.find({"countries": {"$in": countries}}, {"title": 1}))
 
     except Exception as e:
@@ -149,8 +143,6 @@ def get_movies_faceted(filters, page, movies_per_page):
     complete this task.
     """
 
-    # TODO: Faceted Search
-    # Add the necessary stages to the pipeline variable in the correct order.
     pipeline.extend([skip_stage, limit_stage, facet_stage])
 
     try:
@@ -192,8 +184,6 @@ def build_query_sort_project(filters):
             searches MongoDB for movies with that genre.
             """
 
-            # TODO: Text and Subfield Search
-            # Construct a query that will search for the chosen genre.
             query = {"genres": {"$in": filters["genres"]}}
 
     return query, sort, project
@@ -232,8 +222,6 @@ def get_movies(filters, page, movies_per_page):
     the Pymongo cursor.
     """
 
-    # TODO: Paging
-    # Use the cursor to only return the movies that belong on the current page.
     movies = cursor.skip(page * movies_per_page).limit(movies_per_page)
 
     return (list(movies), total_num_movies)
@@ -257,8 +245,6 @@ def get_movie(id):
         Embed the joined comments in a new field called "comments".
         """
 
-        # TODO: Get Comments
-        # Implement the required pipeline.
         pipeline = [
             {
                 "$match": {
@@ -287,21 +273,9 @@ def get_movie(id):
         ]
         return db.movies.aggregate(pipeline).next()
 
-    # TODO: Error Handling
-    # If an invalid ID is passed to `get_movie`, it should return None.
-    except InvalidId:
-
-        """
-        Ticket: Error Handling
-
-        Handle the InvalidId exception from the BSON library the same way as the
-        StopIteration exception is handled. Both exceptions should result in
-        `get_movie` returning None.
-        """
-
+    except (StopIteration, InvalidId):
         return None
-
-    except Exception as e:
+    except Exception:
         return {}
 
 
@@ -340,8 +314,6 @@ def add_comment(movie_id, user, comment, date):
 
     Name and email must be retrieved from the "user" object.
     """
-    # TODO: Create/Update Comments
-    # Construct the comment document to be inserted into MongoDB.
     comment_doc = {
         "name": user.name,
         "email": user.email,
@@ -358,9 +330,6 @@ def update_comment(comment_id, user_email, text, date):
     based by both comment _id field as well as the email field to doubly ensure
     the user has permission to edit this comment.
     """
-    # TODO: Create/Update Comments
-    # Use the user_email and comment_id to select the proper comment, then
-    # update the "text" and "date" of the selected comment.
     response = db.comments.update_one(
         {
             "email": user_email,
@@ -390,8 +359,6 @@ def delete_comment(comment_id, user_email):
     this user has permission to delete this comment, and then delete it.
     """
 
-    # TODO: Delete Comments
-    # Use the user_email and comment_id to delete the proper comment.
     response = db.comments.delete_one({
         "_id": ObjectId(comment_id),
         "email": user_email,
@@ -420,9 +387,9 @@ def get_user(email):
     """
     Given an email, returns a document from the `users` collection.
     """
-    # TODO: User Management
-    # Retrieve the user document corresponding with the user's email.
-    return db.users.find_one({ "email": email })
+    return db.users.find_one({
+        "email": email,
+    })
 
 
 def add_user(name, email, hashedpw):
@@ -439,10 +406,6 @@ def add_user(name, email, hashedpw):
     """
 
     try:
-        # TODO: User Management
-        # Insert a user with the "name", "email", and "password" fields.
-        # TODO: Durable Writes
-        # Use a more durable Write Concern for this operation.
         db.users.insert_one({
             "name": name,
             "email": email,
@@ -465,8 +428,10 @@ def login_user(email, jwt):
         # Use an UPSERT statement to update the "jwt" field in the document,
         # matching the "user_id" field with the email passed to this function.
         db.sessions.update_one(
-            { "user_id": email },
-            { "$set": { "jwt": jwt } },
+            {"user_id": email},
+            {"$set": {
+                "jwt": jwt
+            }},
             upsert=True,
         )
         return {"success": True}
@@ -482,9 +447,9 @@ def logout_user(email):
     In `sessions`, each user's email is stored in a field called "user_id".
     """
     try:
-        # TODO: User Management
-        # Delete the document in the `sessions` collection matching the email.
-        db.sessions.delete_one({ "user_id": email })
+        db.sessions.delete_one({
+            "user_id": email,
+        })
         return {"success": True}
     except Exception as e:
         return {"error": e}
@@ -497,9 +462,7 @@ def get_user_session(email):
     In `sessions`, each user's email is stored in a field called "user_id".
     """
     try:
-        # TODO: User Management
-        # Retrieve the session document corresponding with the user's email.
-        return db.sessions.find_one({ "user_id": email })
+        return db.sessions.find_one({"user_id": email})
     except Exception as e:
         return {"error": e}
 
@@ -510,10 +473,8 @@ def delete_user(email):
     that user's session from the `sessions` collection.
     """
     try:
-        # TODO: User Management
-        # Delete the corresponding documents from `users` and `sessions`.
-        db.sessions.delete_one({ "user_id": email })
-        db.users.delete_one({ "email": email })
+        db.sessions.delete_one({"user_id": email})
+        db.users.delete_one({"email": email})
         if get_user(email) is None:
             return {"success": True}
         else:
@@ -537,11 +498,11 @@ def update_prefs(email, prefs):
         reflect the information in prefs.
         """
 
-        # TODO: User preferences
-        # Use the data in "prefs" to update the user's preferences.
         response = db.users.update_one(
-            { "email": email },
-            { "$set": { "preferences": prefs } }
+            {"email": email},
+            {"$set": {
+                "preferences": prefs
+            }}
         )
         if response.matched_count == 0:
             return {'error': 'no user found'}
@@ -565,8 +526,6 @@ def most_active_commenters():
 
     No field projection necessary.
     """
-    # TODO: User Report
-    # Return the 20 users who have commented the most on MFlix.
     pipeline = [
         {
             "$group": {
